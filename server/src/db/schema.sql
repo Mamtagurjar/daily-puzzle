@@ -1,9 +1,11 @@
--- Users table
+-- Users table (updated for Google OAuth)
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email VARCHAR(255) UNIQUE,
-  password_hash VARCHAR(255),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  google_id VARCHAR(255) UNIQUE,
   display_name VARCHAR(100),
+  picture TEXT,
+  password_hash VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -21,6 +23,8 @@ CREATE TABLE IF NOT EXISTS daily_scores (
 );
 
 -- Indexes
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id);
 CREATE INDEX IF NOT EXISTS idx_daily_scores_user_date ON daily_scores(user_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_daily_scores_date ON daily_scores(date);
 
