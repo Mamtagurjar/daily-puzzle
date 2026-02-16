@@ -7,11 +7,10 @@ import syncRoutes from './routes/sync.js'
 import authRoutes from './routes/auth.js'
 import pool from './db/pool.js'
 
-import dotenv from "dotenv"
+dotenv.config({ override: false })
 
-if (process.env.NODE_ENV !== "production") {
-  dotenv.config()
-}
+console.log("NODE_ENV =", process.env.NODE_ENV)
+console.log("GOOGLE_CALLBACK_URL =", process.env.GOOGLE_CALLBACK_URL)
 
 const app = express()
 const PORT = process.env.PORT || 3001
