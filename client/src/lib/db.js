@@ -54,6 +54,9 @@ export const saveActivity = async (activity) => {
     const userId = getCurrentUserId()
     const id = getUserKey(activity.date)
     
+    // Check if already exists to preserve synced status
+    const existing = await db.get(ACTIVITY_STORE, id)
+    
     await db.put(ACTIVITY_STORE, {
       id,
       userId,
@@ -63,8 +66,8 @@ export const saveActivity = async (activity) => {
       timeTaken: activity.timeTaken,
       difficulty: activity.difficulty,
       hintsUsed: activity.hintsUsed || 0,
-      synced: false,
-      completedAt: new Date().toISOString(),
+      synced: activity.synced !== undefined ? activity.synced : (existing?.synced || false),
+      completedAt: activity.completedAt || existing?.completedAt || new Date().toISOString(),
     })
     
     console.log(`✅ Saved activity for ${userId} on ${activity.date}`)

@@ -1,19 +1,20 @@
-import { getUnsyncedActivities, markAsSynced, saveActivity } from './db'
+import { getUnsyncedActivities, markAsSynced, saveActivity, getActivityByDate, getActivities } from './db'
 import { getAuthState } from './auth'
+import dayjs from 'dayjs'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
-// Sync activities to server (push local, pull server data)
+// Track if this is the first sync for this user session
+const SYNC_FLAG_KEY = 'last_sync_user'
+
 export const syncActivities = async () => {
   const auth = getAuthState()
   
-  // Guest mode - no sync
   if (!auth || auth.mode === 'guest') {
     console.log('👤 Guest mode - no sync')
     return { success: true, message: 'Guest mode' }
   }
   
-  // Check online
   if (!navigator.onLine) {
     throw new Error('No internet connection')
   }
@@ -47,45 +48,62 @@ export const syncActivities = async () => {
         throw new Error(errorData.error || `Push failed: ${pushResponse.status}`)
       }
       
-      // Mark as synced
       await markAsSynced(entries.map(e => e.date))
       console.log(`✅ Pushed ${entries.length} activities`)
     }
     
-    // STEP 2: Pull server activities to local
-    console.log(`⬇️ Pulling activities from server...`)
+    // STEP 2: Pull server activities (ONLY on first sync or if local is empty)
+    const localActivities = await getActivities()
+    const lastSyncUser = sessionStorage.getItem(SYNC_FLAG_KEY)
+    const isFirstSync = lastSyncUser !== auth.userId
     
-    const pullResponse = await fetch(`${API_URL}/api/sync/daily-scores`, {
-      headers: {
-        'Authorization': `Bearer ${auth.token}`,
-      },
-    })
-    
-    if (pullResponse.ok) {
-      const { scores } = await pullResponse.json()
-      console.log(`📥 Received ${scores.length} activities from server`)
+    // Only pull if first sync for this user OR if we have no local data
+    if (isFirstSync || localActivities.length === 0) {
+      console.log(`⬇️ First sync for ${auth.userId}, pulling from server...`)
       
-      // Save server data to local (it will use current user's ID)
-      for (const score of scores) {
-        // Format the date properly
-        const dateStr = typeof score.date === 'string' 
-          ? score.date.split('T')[0]  // Handle ISO date
-          : score.date
+      const pullResponse = await fetch(`${API_URL}/api/sync/daily-scores`, {
+        headers: {
+          'Authorization': `Bearer ${auth.token}`,
+        },
+      })
+      
+      if (pullResponse.ok) {
+        const { scores } = await pullResponse.json()
+        console.log(`📥 Received ${scores.length} activities from server`)
         
-        await saveActivity({
-          date: dateStr,
-          solved: true,
-          score: score.score,
-          timeTaken: score.time_taken,
-          difficulty: 'medium', // Server doesn't store this
-          hintsUsed: 0,
-        })
+        let imported = 0
+        
+        for (const score of scores) {
+          let dateStr = typeof score.date === 'string' 
+            ? score.date.split('T')[0] 
+            : score.date
+          
+          // Double check it doesn't exist
+          const existing = await getActivityByDate(dateStr)
+          if (!existing) {
+            await saveActivity({
+              date: dateStr,
+              solved: true,
+              score: score.score,
+              timeTaken: score.time_taken,
+              difficulty: 'medium',
+              hintsUsed: 0,
+              synced: true,  // Mark as synced since from server
+            })
+            imported++
+          }
+        }
+        
+        console.log(`✅ Imported ${imported} activities from server`)
+        
+        // Mark that we've synced for this user
+        sessionStorage.setItem(SYNC_FLAG_KEY, auth.userId)
       }
-      
-      console.log(`✅ Pulled ${scores.length} activities from server`)
+    } else {
+      console.log(`⏭️ Skipping pull - already synced for ${auth.userId}`)
     }
     
-    return { success: true, synced: unsynced.length, pulled: 0 }
+    return { success: true, synced: unsynced.length }
     
   } catch (error) {
     console.error('❌ Sync error:', error)
