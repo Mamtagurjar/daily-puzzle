@@ -7,7 +7,11 @@ import syncRoutes from './routes/sync.js'
 import authRoutes from './routes/auth.js'
 import pool from './db/pool.js'
 
-dotenv.config()
+import dotenv from "dotenv"
+
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config()
+}
 
 const app = express()
 const PORT = process.env.PORT || 3001
